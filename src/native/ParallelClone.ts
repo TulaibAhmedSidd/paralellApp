@@ -134,7 +134,7 @@ export const ParallelClone = {
         console.warn('Native cloneApp failed, using state fallback:', err);
       }
     }
-    const cloneId = 'clone_' + Date.now();
+    const cloneId = 'clone_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
     mockClones.push({
       packageName,
       appName: packageName.split('.').pop() || packageName,

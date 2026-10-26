@@ -23,9 +23,9 @@ export const VaultLockModal: React.FC<Props> = ({
   const [error, setError] = useState<boolean>(false);
 
   const handleKeyPress = (num: string) => {
-    if (pin.length < 4) {
-      const nextPin = pin + num;
-      setPin(nextPin);
+    setPin(prev => {
+      if (prev.length >= 4) return prev;
+      const nextPin = prev + num;
       setError(false);
 
       if (nextPin.length === 4) {
@@ -41,7 +41,8 @@ export const VaultLockModal: React.FC<Props> = ({
           }, 600);
         }
       }
-    }
+      return nextPin;
+    });
   };
 
   const handleDelete = () => {
@@ -108,6 +109,7 @@ export const VaultLockModal: React.FC<Props> = ({
                 return (
                   <TouchableOpacity
                     key={cIdx}
+                    testID={`keypad-${item}`}
                     style={styles.keyButton}
                     onPress={() => handleKeyPress(item)}>
                     <Text style={styles.keyText}>{item}</Text>

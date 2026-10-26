@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Alert,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ClonedApp, EngineStatus, InstalledApp } from './src/types';
 import { ParallelClone } from './src/native/ParallelClone';
 import { Header } from './src/components/Header';
