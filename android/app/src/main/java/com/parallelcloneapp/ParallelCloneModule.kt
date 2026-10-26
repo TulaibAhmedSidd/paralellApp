@@ -82,12 +82,7 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun requestProvisionWorkProfile(promise: Promise) {
         try {
-            val activity = currentActivity
-            if (activity == null) {
-                promise.reject("ACTIVITY_NULL", "Activity is not available")
-                return
-            }
-
+            val activity: Activity? = reactApplicationContext.currentActivity
             val adminComponent = CloneDeviceAdminReceiver.getComponentName(reactContext)
             val intent = Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
                 putExtra(DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME, adminComponent)
@@ -98,7 +93,12 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
             }
 
             if (intent.resolveActivity(reactContext.packageManager) != null) {
-                activity.startActivityForResult(intent, 5101)
+                if (activity != null) {
+                    activity.startActivityForResult(intent, 5101)
+                } else {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    reactContext.startActivity(intent)
+                }
                 promise.resolve("PROVISIONING_INITIATED")
             } else {
                 promise.reject("UNSUPPORTED", "Work Profile provisioning is not supported on this ROM")
