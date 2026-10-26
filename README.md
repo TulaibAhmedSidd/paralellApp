@@ -1,97 +1,52 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# paralellApp
 
-# Getting Started
+A modern, high-performance React Native mobile app that clones applications (e.g. WhatsApp, Telegram, Instagram, Facebook, and games) with completely isolated data, independent accounts, and separate credentials.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+Inspired by [Parallel Space](https://play.google.com/store/apps/details?id=com.excean.parallelspace&hl=en&pli=1) and built with a Play Store compliant Android Work Profile Isolation Engine.
 
-## Step 1: Start Metro
+---
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## 🌟 Key Features
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- **True Data & Credential Isolation**: Cloned apps run in an isolated Android OS user profile (`UserHandle`) with separate Linux UID, separate `/data/user/10/` storage, isolated Keystore, and independent SQLite databases.
+- **100% Play Store Safe & Ban-Proof**: Uses native Android `DevicePolicyManager` and `LauncherApps` instead of fragile Binder hooking or dynamic DEX loading (VirtualApp), avoiding account bans on WhatsApp and social platforms.
+- **App Library & Instant Cloning**: Detects installed applications on the device, extracting high-resolution icons and metadata with one-tap cloning.
+- **Process Freeze / Hibernate**: Freeze any cloned application to immediately suspend its background tasks, saving battery and RAM.
+- **PIN Vault Security**: Built-in 4-digit PIN security lock (Default: `1234`) to guard cloned spaces from unauthorized access.
+- **Automated CI/CD**: Pre-configured GitHub Actions workflow automatically builds signed Release and Debug APKs on every push to `main`.
 
-```sh
-# Using npm
-npm start
+---
 
-# OR using Yarn
-yarn start
+## 📖 Architecture & Technical Details
+
+For an in-depth breakdown of how the isolation sandbox works, why VirtualApp fails on Android 11–15, and how the native Kotlin bridge operates, see [**`howto.md`**](./howto.md).
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+```bash
+npm install
 ```
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+### 2. Typecheck Code
+```bash
+npx tsc --noEmit
 ```
 
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+### 3. Run on Android
+```bash
+npx react-native run-android
 ```
 
-Then, and every time you update your native dependencies, run:
+---
 
-```sh
-bundle exec pod install
-```
+## 🤖 GitHub Actions APK Generation
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+This repository includes a production-grade CI workflow at `.github/workflows/build-apk.yml`. On every push to `main`:
+1. Sets up Node.js 22 and Java 17.
+2. Installs dependencies and runs Gradle 9.x.
+3. Builds `assembleRelease` and `assembleDebug`.
+4. Publishes a GitHub Release with `parallel-space-clone.apk`.
+5. Uploads both Release and Debug APK artifacts for instant download.

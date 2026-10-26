@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
       android:name=".MainApplication"
@@ -11,6 +14,7 @@
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
+      
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"
@@ -23,5 +27,23 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <receiver
+        android:name=".CloneDeviceAdminReceiver"
+        android:description="@string/device_admin_description"
+        android:label="@string/device_admin_label"
+        android:permission="android.permission.BIND_DEVICE_ADMIN"
+        android:exported="true">
+        <meta-data
+            android:name="android.app.device_admin"
+            android:resource="@xml/device_admin_policies" />
+        <intent-filter>
+            <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
+            <action android:name="android.intent.action.MANAGED_PROFILE_ADDED" />
+            <action android:name="android.intent.action.MANAGED_PROFILE_REMOVED" />
+        </intent-filter>
+      </receiver>
+
     </application>
 </manifest>

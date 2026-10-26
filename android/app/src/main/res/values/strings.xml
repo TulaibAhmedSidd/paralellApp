@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">ParallelCloneApp</string>
+    <string name="app_name">Parallel Space</string>
+    <string name="device_admin_label">Parallel Space Isolation Engine</string>
+    <string name="device_admin_description">Enables isolated multi-account container profiles for cloning apps securely.</string>
 </resources>
