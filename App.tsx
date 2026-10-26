@@ -67,10 +67,33 @@ export default function App() {
       return;
     }
 
+    if (!engineStatus?.hasWorkProfile) {
+      Alert.alert(
+        'Sandbox Activation Required',
+        `To open ${clone.appName} with a completely fresh login screen, your device needs to initialize the dual container. Tap "Activate Now" to complete the 1-time setup.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Activate Now', onPress: handleRequestProvision },
+        ],
+      );
+      return;
+    }
+
     try {
       await ParallelClone.launchApp(clone.packageName, true);
-    } catch (err) {
-      Alert.alert('Launch Notice', `Starting ${clone.appName} in isolated container.`);
+    } catch (err: any) {
+      if (err?.message?.includes('NEED_WORK_PROFILE')) {
+        Alert.alert(
+          'Activation Required',
+          'Please activate the dual container so your clone can have its own separate login.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Activate Now', onPress: handleRequestProvision },
+          ],
+        );
+      } else {
+        Alert.alert('Launch Error', err?.message || 'Unable to launch clone in container.');
+      }
     }
   };
 
@@ -143,6 +166,7 @@ export default function App() {
             onToggleFreeze={handleToggleFreeze}
             onRemove={handleRemove}
             onNavigateAdd={() => setActiveTab('library')}
+            onActivateContainer={handleRequestProvision}
             hasWorkProfile={Boolean(engineStatus?.hasWorkProfile)}
           />
         )}

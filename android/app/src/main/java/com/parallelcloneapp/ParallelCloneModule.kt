@@ -86,10 +86,6 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
             val adminComponent = CloneDeviceAdminReceiver.getComponentName(reactContext)
             val intent = Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
                 putExtra(DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME, adminComponent)
-                putExtra(DevicePolicyManager.EXTRA_PROVISIONING_SKIP_ENCRYPTION, true)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    putExtra(DevicePolicyManager.EXTRA_PROVISIONING_SKIP_USER_CONSENT, false)
-                }
             }
 
             if (intent.resolveActivity(reactContext.packageManager) != null) {
@@ -261,16 +257,37 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
             val workProfileHandle = getWorkProfileUserHandle()
             val launcherApps = getLauncherApps()
 
-            if (isClone && workProfileHandle != null && launcherApps != null) {
-                val activities = launcherApps.getActivityList(packageName, workProfileHandle)
-                if (activities.isNotEmpty()) {
-                    launcherApps.startMainActivity(activities[0].componentName, workProfileHandle, null, null)
-                    promise.resolve("LAUNCHED_IN_WORK_PROFILE")
+            if (isClone) {
+                if (workProfileHandle == null) {
+                    promise.reject("NEED_WORK_PROFILE", "Work Profile container is not activated yet. Please activate the container so your clone can have its own separate login.")
                     return
+                }
+
+                if (launcherApps != null) {
+                    // Ensure the package is installed into the work profile
+                    val dpm = getDevicePolicyManager()
+                    val adminComponent = CloneDeviceAdminReceiver.getComponentName(reactContext)
+                    try {
+                        if (dpm.isProfileOwnerApp(reactContext.packageName)) {
+                            dpm.installExistingPackage(adminComponent, packageName)
+                        }
+                    } catch (e: Exception) {
+                        // ignore if already installed
+                    }
+
+                    val activities = launcherApps.getActivityList(packageName, workProfileHandle)
+                    if (activities.isNotEmpty()) {
+                        launcherApps.startMainActivity(activities[0].componentName, workProfileHandle, null, null)
+                        promise.resolve("LAUNCHED_IN_WORK_PROFILE")
+                        return
+                    } else {
+                        promise.reject("APP_NOT_IN_PROFILE", "App $packageName is being initialized in the isolated container. Please launch again.")
+                        return
+                    }
                 }
             }
 
-            // Launch standard or fallback
+            // Launch standard personal app
             val intent = pm.getLaunchIntentForPackage(packageName)
             if (intent != null) {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

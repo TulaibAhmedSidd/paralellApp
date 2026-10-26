@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { ClonedApp } from '../types';
 import { CloneCard } from '../components/CloneCard';
-import { Plus, Shield, Cpu, Zap } from 'lucide-react-native';
+import { Plus, Shield, Cpu, Zap, Sparkles, CheckCircle2 } from 'lucide-react-native';
 
 interface Props {
   clones: ClonedApp[];
@@ -17,6 +17,7 @@ interface Props {
   onToggleFreeze: (clone: ClonedApp) => void;
   onRemove: (clone: ClonedApp) => void;
   onNavigateAdd: () => void;
+  onActivateContainer: () => void;
   hasWorkProfile: boolean;
 }
 
@@ -26,6 +27,7 @@ export const HomeScreen: React.FC<Props> = ({
   onToggleFreeze,
   onRemove,
   onNavigateAdd,
+  onActivateContainer,
   hasWorkProfile,
 }) => {
   const confirmRemove = (clone: ClonedApp) => {
@@ -44,19 +46,35 @@ export const HomeScreen: React.FC<Props> = ({
       {/* Sandbox Info Banner */}
       <View style={styles.banner}>
         <View style={styles.bannerIcon}>
-          <Shield size={20} color="#38BDF8" />
+          <Shield size={20} color={hasWorkProfile ? '#4ADE80' : '#38BDF8'} />
         </View>
         <View style={styles.bannerTextContainer}>
-          <Text style={styles.bannerTitle}>
-            {hasWorkProfile ? 'Work Profile Sandbox Active' : 'Isolated Multi-Instance Engine'}
+          <Text style={[styles.bannerTitle, hasWorkProfile && { color: '#4ADE80' }]}>
+            {hasWorkProfile ? 'Work Profile Sandbox Active' : 'Setup Required for Fresh Logins'}
           </Text>
           <Text style={styles.bannerDesc}>
             {hasWorkProfile
               ? 'Native OS user profile isolation. Separate UID, storage & Keystore.'
-              : 'Cloned apps run with separate databases, storage and credentials.'}
+              : 'Container must be activated so clones open with a brand new login screen.'}
           </Text>
         </View>
       </View>
+
+      {/* Activation Action Card if Not Provisioned */}
+      {!hasWorkProfile && (
+        <View style={styles.activationCard}>
+          <View style={styles.activationHeader}>
+            <Sparkles size={20} color="#FBBF24" />
+            <Text style={styles.activationTitle}>Step 1: Activate Dual Container</Text>
+          </View>
+          <Text style={styles.activationDesc}>
+            To run a 2nd Muzz or WhatsApp account with a clean login screen, tap below. Android will set up your private container in 5 seconds:
+          </Text>
+          <TouchableOpacity style={styles.activateBtn} onPress={onActivateContainer}>
+            <Text style={styles.activateBtnText}>⚡ Activate Sandbox Container</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Stats bar */}
       <View style={styles.statsRow}>
@@ -75,9 +93,11 @@ export const HomeScreen: React.FC<Props> = ({
         </View>
 
         <View style={styles.statItem}>
-          <Shield size={14} color="#94A3B8" />
-          <Text style={styles.statLabel}>Security:</Text>
-          <Text style={[styles.statValue, { color: '#4ADE80' }]}>Isolated</Text>
+          <CheckCircle2 size={14} color={hasWorkProfile ? '#4ADE80' : '#FBBF24'} />
+          <Text style={styles.statLabel}>Container:</Text>
+          <Text style={[styles.statValue, { color: hasWorkProfile ? '#4ADE80' : '#FBBF24' }]}>
+            {hasWorkProfile ? 'Ready' : 'Needs Setup'}
+          </Text>
         </View>
       </View>
 
@@ -100,7 +120,7 @@ export const HomeScreen: React.FC<Props> = ({
             </View>
             <Text style={styles.emptyTitle}>No Cloned Apps Yet</Text>
             <Text style={styles.emptySubtitle}>
-              Clone WhatsApp, Telegram, Instagram, or games to use multiple accounts simultaneously with 100% separate data!
+              Clone Muzz, WhatsApp, Telegram, or Instagram to run multiple accounts simultaneously with 100% separate logins!
             </Text>
             <TouchableOpacity style={styles.emptyAddBtn} onPress={onNavigateAdd}>
               <Plus size={16} color="#FFFFFF" />
@@ -156,6 +176,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94A3B8',
     marginTop: 2,
+  },
+  activationCard: {
+    margin: 16,
+    marginBottom: 8,
+    backgroundColor: 'rgba(251, 191, 36, 0.08)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(251, 191, 36, 0.35)',
+  },
+  activationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  activationTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FBBF24',
+  },
+  activationDesc: {
+    fontSize: 12,
+    color: '#E2E8F0',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  activateBtn: {
+    backgroundColor: '#F59E0B',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activateBtnText: {
+    color: '#0F172A',
+    fontWeight: '800',
+    fontSize: 13,
   },
   statsRow: {
     flexDirection: 'row',
