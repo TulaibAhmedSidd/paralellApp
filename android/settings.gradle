@@ -3,4 +3,10 @@ plugins { id("com.facebook.react.settings") }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'ParallelCloneApp'
 include ':app'
+
+// NewBlackbox virtualization engine (vendored, see android/vendor/newblackbox/VENDOR.md)
+include ':Bcore', ':black-reflection', ':compiler'
+project(':Bcore').projectDir = file('vendor/newblackbox/Bcore')
+project(':black-reflection').projectDir = file('vendor/newblackbox/black-reflection')
+project(':compiler').projectDir = file('vendor/newblackbox/compiler')
 includeBuild('../node_modules/@react-native/gradle-plugin')

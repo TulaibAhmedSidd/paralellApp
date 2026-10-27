@@ -17,10 +17,9 @@ export interface ClonedApp {
 }
 
 export interface EngineStatus {
-  isProfileOwner: boolean;
-  isDeviceOwner: boolean;
-  hasWorkProfile: boolean;
-  isWorkProfileSupported: boolean;
+  engineReady: boolean; // NewBlackbox virtual services are running
+  is64Bit: boolean;
+  virtualUserCount: number; // one virtual user per clone
   packageName: string;
   androidVersion: number;
 }

@@ -59,7 +59,7 @@ export default function App() {
               setClones(prev =>
                 prev.map(c => (c.cloneId === clone.cloneId ? { ...c, isFrozen: false } : c)),
               );
-              await ParallelClone.launchApp(clone.packageName, true);
+              await launchClone(clone);
             },
           },
         ],
@@ -67,33 +67,17 @@ export default function App() {
       return;
     }
 
-    if (!engineStatus?.hasWorkProfile) {
-      Alert.alert(
-        'Sandbox Activation Required',
-        `To open ${clone.appName} with a completely fresh login screen, your device needs to initialize the dual container. Tap "Activate Now" to complete the 1-time setup.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Activate Now', onPress: handleRequestProvision },
-        ],
-      );
-      return;
-    }
+    await launchClone(clone);
+  };
 
+  const launchClone = async (clone: ClonedApp) => {
     try {
-      await ParallelClone.launchApp(clone.packageName, true);
+      await ParallelClone.launchClone(clone.cloneId);
     } catch (err: any) {
-      if (err?.message?.includes('NEED_WORK_PROFILE')) {
-        Alert.alert(
-          'Activation Required',
-          'Please activate the dual container so your clone can have its own separate login.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Activate Now', onPress: handleRequestProvision },
-          ],
-        );
-      } else {
-        Alert.alert('Launch Error', err?.message || 'Unable to launch clone in container.');
-      }
+      Alert.alert(
+        'Could Not Open Clone',
+        `${err?.message || 'Unable to open the clone.'}\n\nSome apps block virtual spaces and cannot be cloned.`,
+      );
     }
   };
 
@@ -114,15 +98,19 @@ export default function App() {
     const cloneNumber = clones.filter(c => c.packageName === app.packageName).length + 1;
     const label = `Clone #${cloneNumber}`;
 
-    const res = await ParallelClone.cloneApp(app.packageName, label);
-    if (res.success) {
-      const updatedClones = await ParallelClone.getClonedApps();
-      setClones(updatedClones);
-      setActiveTab('home');
-      Alert.alert(
-        'App Cloned Successfully!',
-        `${app.name} has been duplicated into your isolated space with a fresh data sandbox.`,
-      );
+    try {
+      const res = await ParallelClone.cloneApp(app.packageName, label);
+      if (res.success) {
+        const updatedClones = await ParallelClone.getClonedApps();
+        setClones(updatedClones);
+        setActiveTab('home');
+        Alert.alert(
+          'App Cloned Successfully!',
+          `${app.name} (${label}) is ready. Open it to sign in with a different account.`,
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Clone Failed', err?.message || `Could not clone ${app.name}.`);
     }
   };
 
@@ -132,17 +120,6 @@ export default function App() {
     }
     setClones(prev => prev.map(c => ({ ...c, isFrozen: true })));
     Alert.alert('All Clones Frozen', 'All background isolated processes are suspended.');
-  };
-
-  const handleRequestProvision = async () => {
-    try {
-      await ParallelClone.requestProvisionWorkProfile();
-    } catch (err: any) {
-      Alert.alert(
-        'Provision Notice',
-        err?.message || 'Work Profile enrollment initiated in Android Settings.',
-      );
-    }
   };
 
   const clonedPackageNames = new Set(clones.map(c => c.packageName));
@@ -166,8 +143,7 @@ export default function App() {
             onToggleFreeze={handleToggleFreeze}
             onRemove={handleRemove}
             onNavigateAdd={() => setActiveTab('library')}
-            onActivateContainer={handleRequestProvision}
-            hasWorkProfile={Boolean(engineStatus?.hasWorkProfile)}
+            engineReady={Boolean(engineStatus?.engineReady)}
           />
         )}
 
@@ -183,7 +159,6 @@ export default function App() {
         {activeTab === 'engine' && (
           <EngineSettingsScreen
             engineStatus={engineStatus}
-            onRequestProvision={handleRequestProvision}
             onFreezeAll={handleFreezeAll}
             onToggleVaultLock={() => setIsVaultLocked(true)}
             isVaultLocked={isVaultLocked}

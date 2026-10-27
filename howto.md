@@ -1,118 +1,67 @@
-# Parallel Space Clone — Architecture & Implementation Guide (`howto.md`)
+# Parallel Space Clone — Architecture Guide (`howto.md`)
 
-## 1. Executive Summary & Project Goal
+## 1. Goal
 
-The goal of this project is to create a modern, high-performance **Parallel Space / Multi-Account Cloner** mobile application using **React Native** and a **Native Android Work Profile Isolation Engine**. 
+Run a second (or third) copy of an installed app, such as Muzz or WhatsApp, with its own login and data. Your account in the real app is not touched.
 
-Just like [Parallel Space](https://play.google.com/store/apps/details?id=com.excean.parallelspace&hl=en&pli=1), this app allows users to clone any installed application (such as WhatsApp, Telegram, Instagram, Facebook, or mobile games) so that the cloned instance runs with:
-- **Completely new, separate login credentials and account tokens**
-- **Independent SQLite databases, SharedPreferences, and file storage**
-- **Separate cache, encryption keys, and notification channels**
-- **Zero data cross-contamination with the personal app**
+## 2. How it works: a virtual space inside our app
 
----
+Parallel Space and this app use the same idea. The cloned app is **not** installed a second time in Android, and no Work Profile is created. Instead:
 
-## 2. Core Question: Will the Cloned App Run in its Own Sandbox Environment?
+1. **The engine loads the real APK.** NewBlackbox reads the app's APK straight from where Android installed it (`ApplicationInfo.sourceDir`). Nothing is copied or downloaded.
+2. **It runs the APK in our own processes.** `AndroidManifest.xml` in `Bcore` declares many stub activities, services and providers, plus processes `:p0`, `:p1`... When a clone opens, the engine starts it in one of those stub processes under our app's identity.
+3. **It hooks Android's system services.** Calls the clone makes to the package manager, activity manager, accounts and storage are redirected to the engine's own virtual services, which run in the `:black` process. The clone believes it is installed normally.
+4. **It keeps data separate per virtual user.** Each clone gets a virtual user id (0, 1, 2...). Its databases, shared prefs and files live in that user's folder inside our app's private storage. A new virtual user is empty, so the clone opens on a fresh login screen.
 
-### **Yes, 100% Guaranteed.**
+```
+Real phone                         ParallelCloneApp (one Android app)
+──────────                         ──────────────────────────────────────────────
+Muzz (your main account)           main process   : React Native UI + ParallelCloneModule
+  /data/user/0/com.muzmatch...     :black         : NewBlackbox virtual system services
+                                   :p0            : Muzz clone, virtual user 0 (account B)
+                                   :p1            : Muzz clone, virtual user 1 (account C)
+```
 
-To understand how the sandbox operates and why our architecture was chosen, here is an in-depth technical analysis comparing **outdated in-process virtualization** with **modern Android Work Profile isolation**:
+### Trade-offs
 
-### A. The Legacy Approach: In-Process Virtualization (VirtualApp / Binder Hooking)
-Apps like early versions of Parallel Space used a user-space container framework known as **VirtualApp**:
-1. **Dynamic Class Loading**: The guest APK was never installed on Android. Instead, its `classes.dex` was loaded into the host app's process using `DexClassLoader`.
-2. **Binder Hooking & Dynamic Proxies**: In Android, apps interact with OS services (`ActivityManagerService`, `PackageManagerService`) via Binder IPC. VirtualApp hooked into Java-level Binder proxies and native PLT/GOT tables to trick the guest app into thinking it was running normally.
-3. **The Fatal Flaws on Modern Android (10, 11, 12, 13, 14, 15)**:
-   - **Google Play Protect Ban**: Google flags VirtualApp and dynamic DEX loaders as malware/trojans (CWE-829 unauthorized code execution) and bans them from the Google Play Store.
-   - **Hidden API Blocking**: Android strictly prevents Java reflection on hidden framework APIs (`@UnsupportedAppUsage`), causing continuous crashes.
-   - **SELinux & 64-Bit CFI**: Strict SELinux policies and Control Flow Integrity crash hooked Binder calls.
-   - **Account Bans**: Anti-fraud systems in WhatsApp, banking apps, and games actively detect VirtualApp hooks and permanently ban user accounts.
+- **Detection.** Some apps check for virtual spaces and refuse to run, or flag the account. Parallel Space has the same limit, and it stopped cloning apps that declare `REQUIRE_SECURE_ENV`.
+- **Target SDK 28.** The host app must target SDK 28 so the engine's hidden-API and storage tricks keep working. Google Play will not accept it, so the APK is shared directly.
+- **ARM only.** The native hooks (`libblackbox.so`, Dobby) are built for `arm64-v8a` and `armeabi-v7a`.
 
-### B. Our Chosen Solution: Android Work Profile Container Engine (Shelter / Island Architecture)
-To deliver a rock-solid, production-grade application that works smoothly across Android 10 through Android 15 and is **100% Google Play Store Compliant**, we implemented the **Work Profile Isolation Engine**:
-1. **Genuine OS-Level User Sandbox (`UserHandle`)**:
-   - Android creates a managed profile with its own distinct User ID (e.g., `User 10`).
-   - The clone is assigned an entirely **different Linux UID**.
-   - Storage is strictly isolated under `/data/user/10/<package_name>/` (the personal app lives under `/data/user/0/<package_name>/`).
-   - SQLite databases, secure storage, and Keystore tokens are completely physically isolated by the Linux kernel.
-2. **Native App Cloning (`DevicePolicyManager.installExistingPackage`)**:
-   - Rather than duplicating 100MB+ APK binaries, Android links the existing APK code to the managed user profile and initializes a pristine, empty data directory.
-   - The cloned app launches via `LauncherApps.startMainActivity()` targeted at the managed profile `UserHandle`.
-3. **Zero Risk of Ban**:
-   - WhatsApp and Google Play Services recognize the app as running in a standard, official Android enterprise sandbox. No hooks, no code injection, no bans.
+## 3. Code map
 
----
-
-## 3. Technology Stack
-
-| Layer | Technology | Purpose |
+| Layer | File | What it does |
 | :--- | :--- | :--- |
-| **Frontend Framework** | **React Native 0.88.0** | Cross-platform UI foundation with React 19. |
-| **Language** | **TypeScript 5.x / Kotlin 2.2.0** | End-to-end type safety across UI and native Android code. |
-| **Native Bridge** | **React Native Native Modules** | `ParallelCloneModule.kt` exposing Android DPM and LauncherApps APIs to JS. |
-| **OS Sandbox Engine** | **Android `DevicePolicyManager` & `LauncherApps`** | Native profile provisioning, package installation, and execution isolation. |
-| **Security & Admin** | **`DeviceAdminReceiver` & `device_admin_policies.xml`** | Declares administrative management for the isolated workspace. |
-| **UI Components** | **Custom Lucide Icons & Responsive Styles** | Dark neon cyber aesthetic with status indicators and PIN keypad. |
-| **Asset Pipeline** | **Python PIL (Pillow)** | High-resolution Lanczos downsampled mipmap icons (`ic_launcher`, `ic_launcher_round`). |
-| **CI/CD Automation** | **GitHub Actions (`build-apk.yml`)** | Automated release pipeline producing signed Release & Debug APKs. |
+| Engine | `android/vendor/newblackbox/` | Vendored NewBlackbox modules (`Bcore`, `black-reflection`, `compiler`). See `VENDOR.md` for the source commit and our privacy patches. |
+| Startup | `android/app/.../MainApplication.kt` | Attaches `BlackBoxCore` in every process; starts React Native only in the main process. |
+| Bridge | `android/app/.../ParallelCloneModule.kt` | Clone registry (SharedPreferences) and calls into `BlackBoxCore`. |
+| JS API | `src/native/ParallelClone.ts` | Typed wrapper; uses mock data when the native module is missing (tests, iOS). |
+| UI | `App.tsx`, `src/screens/*` | Home (clones), Library (installed apps), Engine (status, freeze all, lock). |
 
----
+### Bridge methods
 
-## 4. How Each Goal Was Achieved
+- `getEngineStatus()`: whether the virtual services are running, 32/64-bit mode, number of virtual users, Android API level.
+- `getInstalledApps()`: launchable apps on the phone, with icons as base64 PNG.
+- `getClonedApps()`: the clone registry.
+- `cloneApp(packageName, label)`: picks the next free virtual user, then `installPackageAsUser(packageName, userId)`.
+- `launchClone(cloneId)`: installs again if needed, then `launchApk(packageName, userId)`.
+- `toggleFreezeApp(cloneId, freeze)`: sets the flag; freezing also calls `stopPackage`.
+- `removeClonedApp(cloneId)`: `stopPackage`, `uninstallPackageAsUser`, then deletes the virtual user and its data.
 
-### 1. Native Device Admin & Work Profile Engine
-- Implemented [`CloneDeviceAdminReceiver.kt`](file:///android/app/src/main/java/com/parallelcloneapp/CloneDeviceAdminReceiver.kt): handles `ACTION_PROFILE_PROVISIONING_COMPLETE`, profile name registration, and lifecycle callbacks.
-- Registered in [`AndroidManifest.xml`](file:///android/app/src/main/AndroidManifest.xml) with `BIND_DEVICE_ADMIN` permission and [`device_admin_policies.xml`](file:///android/app/src/main/res/xml/device_admin_policies.xml).
-- Added `QUERY_ALL_PACKAGES` permission so the app can discover user-installed apps on Android 11+.
-
-### 2. High-Performance Native Bridge ([`ParallelCloneModule.kt`](file:///android/app/src/main/java/com/parallelcloneapp/ParallelCloneModule.kt))
-- **`getInstalledApps()`**: Runs on a background worker thread to query all launchable apps, extracting app name, package name, system flags, and converting high-res app icons to Base64 PNGs.
-- **`getClonedApps()`**: Reads the isolated clones registry and resolves icon/status data.
-- **`cloneApp(packageName, cloneLabel)`**: Directs `DevicePolicyManager` to install the package into the managed space and registers clone metadata.
-- **`launchApp(packageName, isClone)`**: Launches the target app inside the managed user profile via `LauncherApps.startMainActivity()` or standard intent.
-- **`toggleFreezeApp(cloneId, freeze)`**: Allows users to freeze background clone processes to save battery and RAM.
-
-### 3. Sleek React Native User Interface
-- **Dashboard (`HomeScreen.tsx`)**: Displays all cloned apps with work badges, status tags (Active vs Frozen), one-tap launch buttons, and freeze toggles.
-- **App Library (`AddCloneScreen.tsx`)**: Searchable list of all installed device applications with category filters (Social, Games, All) and one-tap clone actions.
-- **Diagnostics (`EngineSettingsScreen.tsx`)**: Real-time inspection of Profile Owner status, multi-user support, and one-tap Work Profile provisioning wizard.
-- **PIN Vault (`VaultLockModal.tsx`)**: 4-digit PIN security keypad protecting private accounts from unauthorized physical access (Default PIN: `1234`).
-
-### 4. Custom App Icon
-- Built and executed a Python PIL script generating sharp, modern isometric dual-cube logos with cyan and violet gradients, saved into all density folders (`mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`).
-
-### 5. Automated GitHub Actions Build (`.github/workflows/build-apk.yml`)
-- Configured based on `muzz/marraige_app/mobile/.github/workflows/build-apk.yml`:
-  1. Checks out repository.
-  2. Sets up Node.js 22 & installs dependencies (`npm install --legacy-peer-deps`).
-  3. Sets up JDK 17 & Gradle 8.7+ / 9.x.
-  4. Builds `./gradlew assembleRelease assembleDebug --no-daemon`.
-  5. Publishes GitHub Release with `parallel-space-clone.apk`.
-  6. Uploads build artifacts (`ParallelSpace-Release-APK` and `ParallelSpace-Debug-APK`).
-
----
-
-## 5. How to Build & Run Locally
+## 4. Build & run locally
 
 ### Prerequisites
-- Node.js >= 20
-- JDK 17
-- Android SDK (API 34/35)
+- Node.js >= 22
+- JDK 21
+- Android SDK (platforms 35 and 37; NDK 29.0.13846066 is installed automatically by Gradle)
+- An ARM Android phone
 
 ### Commands
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Typecheck TypeScript
 npx tsc --noEmit
-
-# 3. Run on connected Android device or emulator
 npx react-native run-android
-
-# 4. Or assemble APK manually
-cd android
-./gradlew assembleRelease
+# or build an APK:
+cd android && ./gradlew assembleRelease
 ```
-The output APK is generated at:
-`android/app/build/outputs/apk/release/app-release.apk`
+Output: `android/app/build/outputs/apk/release/app-release.apk`

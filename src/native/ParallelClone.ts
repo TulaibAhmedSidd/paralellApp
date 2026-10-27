@@ -84,20 +84,12 @@ export const ParallelClone = {
       }
     }
     return {
-      isProfileOwner: false,
-      isDeviceOwner: false,
-      hasWorkProfile: false,
-      isWorkProfileSupported: true,
+      engineReady: true,
+      is64Bit: true,
+      virtualUserCount: mockClones.length,
       packageName: 'com.parallelcloneapp',
       androidVersion: 34,
     };
-  },
-
-  async requestProvisionWorkProfile(): Promise<string> {
-    if (this.isAvailable()) {
-      return await ParallelCloneModule.requestProvisionWorkProfile();
-    }
-    return 'MOCK_PROVISION_REQUESTED';
   },
 
   async getInstalledApps(): Promise<InstalledApp[]> {
@@ -128,11 +120,8 @@ export const ParallelClone = {
 
   async cloneApp(packageName: string, cloneLabel: string = ''): Promise<{ success: boolean; cloneId: string }> {
     if (this.isAvailable()) {
-      try {
-        return await ParallelCloneModule.cloneApp(packageName, cloneLabel);
-      } catch (err) {
-        console.warn('Native cloneApp failed, using state fallback:', err);
-      }
+      // Errors (e.g. CLONE_FAILED with the engine's reason) go to the caller
+      return await ParallelCloneModule.cloneApp(packageName, cloneLabel);
     }
     const cloneId = 'clone_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
     mockClones.push({
@@ -147,9 +136,10 @@ export const ParallelClone = {
     return { success: true, cloneId };
   },
 
-  async launchApp(packageName: string, isClone: boolean = true): Promise<string> {
+  // Opens the clone inside our virtual space with its own data (fresh login)
+  async launchClone(cloneId: string): Promise<string> {
     if (this.isAvailable()) {
-      return await ParallelCloneModule.launchApp(packageName, isClone);
+      return await ParallelCloneModule.launchClone(cloneId);
     }
     return 'MOCK_LAUNCH_SUCCESS';
   },
