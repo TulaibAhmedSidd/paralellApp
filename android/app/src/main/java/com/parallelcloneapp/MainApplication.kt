@@ -39,6 +39,10 @@ class MainApplication : Application(), ReactApplication {
         // Keep the engine's persistent daemon off; clones start on demand.
         override fun isEnableDaemonService(): Boolean = false
 
+        // Strip FLAG_SECURE from clone windows. Apps like Muzz mark their screens
+        // secure, which renders as a black screen inside the virtual space.
+        override fun isDisableFlagSecure(): Boolean = true
+
         // Belt and braces with the vendored patch: never upload logs anywhere.
         override fun getLogSenderChatId(): String = ""
       })
