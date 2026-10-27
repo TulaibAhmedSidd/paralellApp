@@ -82,7 +82,8 @@ describe('Parallel Space Isolation & Cloning Engine (rcosteira79/android-skills 
 
   test('launches isolated cloned application safely', async () => {
     const muzzPackage = 'com.muzmatch.muzmatchapp';
-    const launchResult = await ParallelClone.launchApp(muzzPackage, true);
+    const { cloneId } = await ParallelClone.cloneApp(muzzPackage, 'Muzz Launch Test');
+    const launchResult = await ParallelClone.launchClone(cloneId);
     expect(launchResult).toBeTruthy();
   });
 });

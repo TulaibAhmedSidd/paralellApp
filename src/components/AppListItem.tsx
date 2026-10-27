@@ -40,14 +40,14 @@ export const AppListItem: React.FC<Props> = ({
         </View>
       </View>
 
+      {/* Each clone gets its own virtual user, so an app can be cloned again for another account */}
       <TouchableOpacity
         onPress={() => onClone(app)}
-        disabled={isAlreadyCloned}
         style={[styles.cloneBtn, isAlreadyCloned && styles.clonedBtn]}>
         {isAlreadyCloned ? (
           <>
             <Check size={14} color="#22C55E" />
-            <Text style={styles.clonedText}>Cloned</Text>
+            <Text style={styles.clonedText}>Clone again</Text>
           </>
         ) : (
           <>

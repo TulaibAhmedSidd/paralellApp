@@ -3,7 +3,9 @@ buildscript {
         buildToolsVersion = "37.0.0"
         minSdkVersion = 24
         compileSdkVersion = 37
-        targetSdkVersion = 36
+        // NewBlackbox needs the host to target 28: newer targets block the hidden-API and
+        // storage tricks the virtual space relies on. This also means no Play Store release.
+        targetSdkVersion = 28
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.2.0"
     }
@@ -19,3 +21,12 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        // FreeReflection (used by NewBlackbox) is only published on JitPack
+        maven { url "https://www.jitpack.io" }
+    }
+}

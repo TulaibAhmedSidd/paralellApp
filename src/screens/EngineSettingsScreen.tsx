@@ -8,19 +8,15 @@ import {
 } from 'react-native';
 import { EngineStatus } from '../types';
 import {
-  ShieldCheck,
   Cpu,
-  Layers,
   Lock,
   Snowflake,
   CheckCircle2,
   AlertTriangle,
-  ExternalLink,
 } from 'lucide-react-native';
 
 interface Props {
   engineStatus: EngineStatus | null;
-  onRequestProvision: () => void;
   onFreezeAll: () => void;
   onToggleVaultLock: () => void;
   isVaultLocked: boolean;
@@ -28,7 +24,6 @@ interface Props {
 
 export const EngineSettingsScreen: React.FC<Props> = ({
   engineStatus,
-  onRequestProvision,
   onFreezeAll,
   onToggleVaultLock,
   isVaultLocked,
@@ -42,33 +37,33 @@ export const EngineSettingsScreen: React.FC<Props> = ({
             <Cpu size={22} color="#38BDF8" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>Android Isolation Engine</Text>
+            <Text style={styles.cardTitle}>Virtual Space Engine</Text>
             <Text style={styles.cardSubtitle}>
-              Work Profile & Container Architecture
+              NewBlackbox · clones run inside this app
             </Text>
           </View>
         </View>
 
         <Text style={styles.explainText}>
-          Unlike outdated cloner apps that use dangerous Binder hooking and dynamic DEX loading (which crash on Android 11-15 and get blocked by Play Protect), this app leverages Android's native Work Profile container architecture.
+          Cloned apps run inside Parallel Space itself, not in an Android Work Profile. Each clone gets its own virtual user with separate data, so it opens with a fresh login while your main app stays signed in.
         </Text>
 
         <View style={styles.featureGrid}>
           <View style={styles.featureItem}>
             <CheckCircle2 size={16} color="#4ADE80" />
-            <Text style={styles.featureText}>Separate Linux UID</Text>
+            <Text style={styles.featureText}>Fresh login per clone</Text>
           </View>
           <View style={styles.featureItem}>
             <CheckCircle2 size={16} color="#4ADE80" />
-            <Text style={styles.featureText}>Isolated Keyring & Keystore</Text>
+            <Text style={styles.featureText}>Many clones of one app</Text>
           </View>
           <View style={styles.featureItem}>
             <CheckCircle2 size={16} color="#4ADE80" />
-            <Text style={styles.featureText}>Separate SQLite & Cache</Text>
+            <Text style={styles.featureText}>No Work Profile setup</Text>
           </View>
           <View style={styles.featureItem}>
-            <CheckCircle2 size={16} color="#4ADE80" />
-            <Text style={styles.featureText}>Zero Account Ban Risk</Text>
+            <AlertTriangle size={16} color="#FBBF24" />
+            <Text style={styles.featureText}>Some apps block virtual spaces</Text>
           </View>
         </View>
       </View>
@@ -78,43 +73,30 @@ export const EngineSettingsScreen: React.FC<Props> = ({
         <Text style={styles.sectionTitle}>Engine Diagnostics</Text>
 
         <View style={styles.diagRow}>
-          <Text style={styles.diagLabel}>Managed Profile Support:</Text>
-          <Text style={[styles.diagValue, { color: '#4ADE80' }]}>
-            {engineStatus?.isWorkProfileSupported ? 'Supported' : 'Native Mode'}
+          <Text style={styles.diagLabel}>Engine Services:</Text>
+          <Text style={[styles.diagValue, engineStatus?.engineReady ? { color: '#4ADE80' } : { color: '#FBBF24' }]}>
+            {engineStatus?.engineReady ? 'Running' : 'Starting'}
           </Text>
         </View>
 
         <View style={styles.diagRow}>
-          <Text style={styles.diagLabel}>Profile Owner Status:</Text>
-          <Text style={[styles.diagValue, engineStatus?.isProfileOwner ? { color: '#4ADE80' } : { color: '#FBBF24' }]}>
-            {engineStatus?.isProfileOwner ? 'Active (Admin)' : 'Ready for Provision'}
+          <Text style={styles.diagLabel}>Engine Mode:</Text>
+          <Text style={styles.diagValue}>
+            {engineStatus?.is64Bit === false ? '32-bit' : '64-bit'}
           </Text>
         </View>
 
         <View style={styles.diagRow}>
-          <Text style={styles.diagLabel}>Work Profile Initialized:</Text>
-          <Text style={[styles.diagValue, engineStatus?.hasWorkProfile ? { color: '#4ADE80' } : { color: '#94A3B8' }]}>
-            {engineStatus?.hasWorkProfile ? 'Yes (User 10+)' : 'Standard Sandbox'}
-          </Text>
+          <Text style={styles.diagLabel}>Virtual Users:</Text>
+          <Text style={styles.diagValue}>{engineStatus?.virtualUserCount ?? 0}</Text>
         </View>
 
         <View style={styles.diagRow}>
           <Text style={styles.diagLabel}>Android API Level:</Text>
           <Text style={styles.diagValue}>
-            {engineStatus?.androidVersion ? `API ${engineStatus.androidVersion}` : 'Android 14+'}
+            {engineStatus?.androidVersion ? `API ${engineStatus.androidVersion}` : 'Unknown'}
           </Text>
         </View>
-
-        {!engineStatus?.hasWorkProfile && (
-          <TouchableOpacity
-            style={styles.provisionBtn}
-            onPress={onRequestProvision}>
-            <ExternalLink size={16} color="#FFFFFF" />
-            <Text style={styles.provisionBtnText}>
-              Provision Android Work Profile
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* Quick Power Controls */}
@@ -238,21 +220,6 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     fontSize: 13,
     fontWeight: '600',
-  },
-  provisionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0284C7',
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 16,
-    gap: 8,
-  },
-  provisionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
   controlRow: {
     flexDirection: 'row',

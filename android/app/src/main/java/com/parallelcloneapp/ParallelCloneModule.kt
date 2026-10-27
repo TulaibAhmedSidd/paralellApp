@@ -1,27 +1,28 @@
 package com.parallelcloneapp
 
-import android.app.Activity
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
-import android.content.pm.LauncherApps
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
-import android.os.Process
-import android.os.UserHandle
-import android.os.UserManager
 import android.util.Base64
 import com.facebook.react.bridge.*
 import java.io.ByteArrayOutputStream
 import org.json.JSONArray
 import org.json.JSONObject
+import top.niunaijun.blackbox.BlackBoxCore
 
+/**
+ * Bridge to the NewBlackbox virtual space.
+ *
+ * Every clone lives in its own virtual user (userId 0, 1, 2...) inside our app. Each virtual
+ * user has its own data folders, so a clone always starts with a fresh login, separate from
+ * the real app and from other clones of the same app.
+ */
 class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
@@ -32,76 +33,77 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
         return "ParallelCloneModule"
     }
 
-    private fun getDevicePolicyManager(): DevicePolicyManager {
-        return reactContext.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    private fun core(): BlackBoxCore = BlackBoxCore.get()
+
+    private fun prefs(): SharedPreferences =
+        reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun readRegistry(): JSONArray = JSONArray(prefs().getString(KEY_CLONED_APPS, "[]"))
+
+    private fun writeRegistry(registry: JSONArray) {
+        prefs().edit().putString(KEY_CLONED_APPS, registry.toString()).apply()
     }
 
-    private fun getUserManager(): UserManager {
-        return reactContext.getSystemService(Context.USER_SERVICE) as UserManager
-    }
-
-    private fun getLauncherApps(): LauncherApps? {
-        return reactContext.getSystemService(Context.LAUNCHER_APPS_SERVICE) as? LauncherApps
-    }
-
-    private fun getWorkProfileUserHandle(): UserHandle? {
-        val userManager = getUserManager()
-        val myHandle = Process.myUserHandle()
-        for (profile in userManager.userProfiles) {
-            if (profile != myHandle) {
-                return profile
-            }
+    private fun findClone(registry: JSONArray, cloneId: String): JSONObject? {
+        for (i in 0 until registry.length()) {
+            val obj = registry.getJSONObject(i)
+            if (obj.optString("cloneId") == cloneId) return obj
         }
         return null
     }
 
-    @ReactMethod
-    fun getEngineStatus(promise: Promise) {
+    /** Lowest virtual user id not used by another clone or left over in the engine. */
+    private fun nextFreeUserId(registry: JSONArray): Int {
+        val used = mutableSetOf<Int>()
+        for (i in 0 until registry.length()) {
+            val obj = registry.getJSONObject(i)
+            if (obj.has("userId")) used.add(obj.getInt("userId"))
+        }
         try {
-            val dpm = getDevicePolicyManager()
-            val adminComponent = CloneDeviceAdminReceiver.getComponentName(reactContext)
-            val isProfileOwner = dpm.isProfileOwnerApp(reactContext.packageName)
-            val isDeviceOwner = dpm.isDeviceOwnerApp(reactContext.packageName)
-            val workProfileHandle = getWorkProfileUserHandle()
-            val hasWorkProfile = workProfileHandle != null
-
-            val result = Arguments.createMap().apply {
-                putBoolean("isProfileOwner", isProfileOwner)
-                putBoolean("isDeviceOwner", isDeviceOwner)
-                putBoolean("hasWorkProfile", hasWorkProfile)
-                putBoolean("isWorkProfileSupported", reactContext.packageManager.hasSystemFeature(PackageManager.FEATURE_MANAGED_USERS))
-                putString("packageName", reactContext.packageName)
-                putInt("androidVersion", Build.VERSION.SDK_INT)
-            }
-            promise.resolve(result)
+            core().users.forEach { used.add(it.id) }
         } catch (e: Exception) {
-            promise.reject("STATUS_ERROR", e.localizedMessage, e)
+            // Engine not ready; registry ids are enough
+        }
+        var id = 0
+        while (id in used) id++
+        return id
+    }
+
+    private fun ensureUser(userId: Int) {
+        if (core().users.none { it.id == userId }) {
+            core().createUser(userId)
         }
     }
 
-    @ReactMethod
-    fun requestProvisionWorkProfile(promise: Promise) {
-        try {
-            val activity: Activity? = reactApplicationContext.currentActivity
-            val adminComponent = CloneDeviceAdminReceiver.getComponentName(reactContext)
-            val intent = Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
-                putExtra(DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME, adminComponent)
-            }
+    /** Install the real app's APK into the clone's virtual user (no copy, no root needed). */
+    private fun installIntoSpace(packageName: String, userId: Int): String? {
+        ensureUser(userId)
+        if (core().isInstalled(packageName, userId)) return null
+        val result = core().installPackageAsUser(packageName, userId)
+        return if (result.success) null else (result.msg ?: "Install failed")
+    }
 
-            if (intent.resolveActivity(reactContext.packageManager) != null) {
-                if (activity != null) {
-                    activity.startActivityForResult(intent, 5101)
-                } else {
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    reactContext.startActivity(intent)
+    @ReactMethod
+    fun getEngineStatus(promise: Promise) {
+        Thread {
+            try {
+                val ready = try {
+                    core().areServicesAvailable()
+                } catch (e: Exception) {
+                    false
                 }
-                promise.resolve("PROVISIONING_INITIATED")
-            } else {
-                promise.reject("UNSUPPORTED", "Work Profile provisioning is not supported on this ROM")
+                val result = Arguments.createMap().apply {
+                    putBoolean("engineReady", ready)
+                    putBoolean("is64Bit", BlackBoxCore.is64Bit())
+                    putInt("virtualUserCount", try { core().users.size } catch (e: Exception) { 0 })
+                    putString("packageName", reactContext.packageName)
+                    putInt("androidVersion", Build.VERSION.SDK_INT)
+                }
+                promise.resolve(result)
+            } catch (e: Exception) {
+                promise.reject("STATUS_ERROR", e.localizedMessage, e)
             }
-        } catch (e: Exception) {
-            promise.reject("PROVISIONING_ERROR", e.localizedMessage, e)
-        }
+        }.start()
     }
 
     @ReactMethod
@@ -141,10 +143,7 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun getClonedApps(promise: Promise) {
         try {
-            val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val raw = prefs.getString(KEY_CLONED_APPS, "[]")
-            val jsonArray = JSONArray(raw)
-
+            val jsonArray = readRegistry()
             val resultList = Arguments.createArray()
             val pm = reactContext.packageManager
 
@@ -187,135 +186,129 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun cloneApp(packageName: String, cloneLabel: String, promise: Promise) {
-        try {
-            val dpm = getDevicePolicyManager()
-            val adminComponent = CloneDeviceAdminReceiver.getComponentName(reactContext)
+        Thread {
+            try {
+                val registry = readRegistry()
+                val userId = nextFreeUserId(registry)
 
-            // If profile owner, natively clone/install existing package into managed user space
-            if (dpm.isProfileOwnerApp(reactContext.packageName)) {
-                try {
-                    dpm.installExistingPackage(adminComponent, packageName)
-                } catch (e: Exception) {
-                    // Fall back to registry clone
+                val error = installIntoSpace(packageName, userId)
+                if (error != null) {
+                    promise.reject("CLONE_FAILED", error)
+                    return@Thread
                 }
-            }
 
-            val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val raw = prefs.getString(KEY_CLONED_APPS, "[]")
-            val jsonArray = JSONArray(raw)
+                val cloneId = "clone_" + System.currentTimeMillis()
+                registry.put(JSONObject().apply {
+                    put("packageName", packageName)
+                    put("cloneName", cloneLabel.ifEmpty { "Clone #${registry.length() + 1}" })
+                    put("cloneId", cloneId)
+                    put("userId", userId)
+                    put("createdAt", System.currentTimeMillis())
+                    put("isFrozen", false)
+                })
+                writeRegistry(registry)
 
-            val cloneId = "clone_" + System.currentTimeMillis()
-            val newClone = JSONObject().apply {
-                put("packageName", packageName)
-                put("cloneName", cloneLabel.ifEmpty { "Clone #${jsonArray.length() + 1}" })
-                put("cloneId", cloneId)
-                put("createdAt", System.currentTimeMillis())
-                put("isFrozen", false)
+                val res = Arguments.createMap().apply {
+                    putBoolean("success", true)
+                    putString("cloneId", cloneId)
+                    putString("packageName", packageName)
+                }
+                promise.resolve(res)
+            } catch (e: Exception) {
+                promise.reject("CLONE_ERROR", e.localizedMessage, e)
             }
-            jsonArray.put(newClone)
-            prefs.edit().putString(KEY_CLONED_APPS, jsonArray.toString()).apply()
-
-            val res = Arguments.createMap().apply {
-                putBoolean("success", true)
-                putString("cloneId", cloneId)
-                putString("packageName", packageName)
-            }
-            promise.resolve(res)
-        } catch (e: Exception) {
-            promise.reject("CLONE_ERROR", e.localizedMessage, e)
-        }
+        }.start()
     }
 
     @ReactMethod
     fun removeClonedApp(cloneId: String, promise: Promise) {
-        try {
-            val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val raw = prefs.getString(KEY_CLONED_APPS, "[]")
-            val jsonArray = JSONArray(raw)
-            val updatedArray = JSONArray()
+        Thread {
+            try {
+                val registry = readRegistry()
+                val updatedArray = JSONArray()
+                var removed: JSONObject? = null
 
-            var found = false
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                if (obj.optString("cloneId") == cloneId) {
-                    found = true
-                } else {
-                    updatedArray.put(obj)
+                for (i in 0 until registry.length()) {
+                    val obj = registry.getJSONObject(i)
+                    if (obj.optString("cloneId") == cloneId) removed = obj else updatedArray.put(obj)
                 }
+
+                if (removed != null && removed.has("userId")) {
+                    val pkg = removed.getString("packageName")
+                    val userId = removed.getInt("userId")
+                    try {
+                        core().stopPackage(pkg, userId)
+                        core().uninstallPackageAsUser(pkg, userId)
+                        // One clone per virtual user, so the user (and all its data) goes too
+                        if (core().getInstalledApplications(0, userId).isEmpty()) {
+                            core().deleteUser(userId)
+                        }
+                    } catch (e: Exception) {
+                        // Still drop it from the list; leftover data is reused only if the id is
+                        // picked again, and installIntoSpace() starts it from the real APK
+                    }
+                }
+
+                writeRegistry(updatedArray)
+                promise.resolve(removed != null)
+            } catch (e: Exception) {
+                promise.reject("REMOVE_ERROR", e.localizedMessage, e)
             }
-            prefs.edit().putString(KEY_CLONED_APPS, updatedArray.toString()).apply()
-            promise.resolve(found)
-        } catch (e: Exception) {
-            promise.reject("REMOVE_ERROR", e.localizedMessage, e)
-        }
+        }.start()
     }
 
     @ReactMethod
-    fun launchApp(packageName: String, isClone: Boolean, promise: Promise) {
-        try {
-            val pm = reactContext.packageManager
-            val workProfileHandle = getWorkProfileUserHandle()
-            val launcherApps = getLauncherApps()
+    fun launchClone(cloneId: String, promise: Promise) {
+        Thread {
+            try {
+                val registry = readRegistry()
+                val clone = findClone(registry, cloneId)
+                if (clone == null) {
+                    promise.reject("CLONE_NOT_FOUND", "This clone no longer exists.")
+                    return@Thread
+                }
+                val pkg = clone.getString("packageName")
 
-            if (isClone) {
-                if (workProfileHandle == null) {
-                    promise.reject("NEED_WORK_PROFILE", "Work Profile container is not activated yet. Please activate the container so your clone can have its own separate login.")
-                    return
+                // Clones saved by the old Work Profile engine have no virtual user yet
+                if (!clone.has("userId")) {
+                    clone.put("userId", nextFreeUserId(registry))
+                    writeRegistry(registry)
+                }
+                val userId = clone.getInt("userId")
+
+                val error = installIntoSpace(pkg, userId)
+                if (error != null) {
+                    promise.reject("CLONE_FAILED", error)
+                    return@Thread
                 }
 
-                if (launcherApps != null) {
-                    // Ensure the package is installed into the work profile
-                    val dpm = getDevicePolicyManager()
-                    val adminComponent = CloneDeviceAdminReceiver.getComponentName(reactContext)
-                    try {
-                        if (dpm.isProfileOwnerApp(reactContext.packageName)) {
-                            dpm.installExistingPackage(adminComponent, packageName)
-                        }
-                    } catch (e: Exception) {
-                        // ignore if already installed
-                    }
-
-                    val activities = launcherApps.getActivityList(packageName, workProfileHandle)
-                    if (activities.isNotEmpty()) {
-                        launcherApps.startMainActivity(activities[0].componentName, workProfileHandle, null, null)
-                        promise.resolve("LAUNCHED_IN_WORK_PROFILE")
-                        return
-                    } else {
-                        promise.reject("APP_NOT_IN_PROFILE", "App $packageName is being initialized in the isolated container. Please launch again.")
-                        return
-                    }
+                if (core().launchApk(pkg, userId)) {
+                    promise.resolve("LAUNCHED_IN_VIRTUAL_SPACE")
+                } else {
+                    promise.reject("LAUNCH_FAILED", "Could not open $pkg in the virtual space.")
                 }
+            } catch (e: Exception) {
+                promise.reject("LAUNCH_ERROR", e.localizedMessage, e)
             }
-
-            // Launch standard personal app
-            val intent = pm.getLaunchIntentForPackage(packageName)
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                reactContext.startActivity(intent)
-                promise.resolve("LAUNCHED_STANDARD")
-            } else {
-                promise.reject("LAUNCH_FAILED", "Unable to find launch intent for $packageName")
-            }
-        } catch (e: Exception) {
-            promise.reject("LAUNCH_ERROR", e.localizedMessage, e)
-        }
+        }.start()
     }
 
     @ReactMethod
     fun toggleFreezeApp(cloneId: String, freeze: Boolean, promise: Promise) {
         try {
-            val prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val raw = prefs.getString(KEY_CLONED_APPS, "[]")
-            val jsonArray = JSONArray(raw)
-
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                if (obj.optString("cloneId") == cloneId) {
-                    obj.put("isFrozen", freeze)
-                    break
+            val registry = readRegistry()
+            val clone = findClone(registry, cloneId)
+            if (clone != null) {
+                clone.put("isFrozen", freeze)
+                if (freeze && clone.has("userId")) {
+                    try {
+                        core().stopPackage(clone.getString("packageName"), clone.getInt("userId"))
+                    } catch (e: Exception) {
+                        // Not running
+                    }
                 }
             }
-            prefs.edit().putString(KEY_CLONED_APPS, jsonArray.toString()).apply()
+            writeRegistry(registry)
             promise.resolve(freeze)
         } catch (e: Exception) {
             promise.reject("FREEZE_ERROR", e.localizedMessage, e)
