@@ -78,9 +78,25 @@ class ParallelCloneModule(private val reactContext: ReactApplicationContext) :
     /** Install the real app's APK into the clone's virtual user (no copy, no root needed). */
     private fun installIntoSpace(packageName: String, userId: Int): String? {
         ensureUser(userId)
+        ensureGms(userId)
         if (core().isInstalled(packageName, userId)) return null
         val result = core().installPackageAsUser(packageName, userId)
         return if (result.success) null else (result.msg ?: "Install failed")
+    }
+
+    /**
+     * Link the phone's Google Play Services into this virtual user. Apps like Muzz and
+     * WhatsApp refuse to run without it. Best effort: if the phone has no Play Services,
+     * or the install fails, the clone is still created (some apps run without GMS).
+     */
+    private fun ensureGms(userId: Int) {
+        try {
+            if (core().isSupportGms() && !core().isInstallGms(userId)) {
+                core().installGms(userId)
+            }
+        } catch (e: Exception) {
+            // Best effort; the target app install below still runs
+        }
     }
 
     @ReactMethod

@@ -43,7 +43,7 @@ Muzz (your main account)           main process   : React Native UI + ParallelCl
 - `getEngineStatus()`: whether the virtual services are running, 32/64-bit mode, number of virtual users, Android API level.
 - `getInstalledApps()`: launchable apps on the phone, with icons as base64 PNG.
 - `getClonedApps()`: the clone registry.
-- `cloneApp(packageName, label)`: picks the next free virtual user, then `installPackageAsUser(packageName, userId)`.
+- `cloneApp(packageName, label)`: picks the next free virtual user, links in Google Play Services if the phone has them (`installGms`, best effort — many apps such as Muzz need it), then `installPackageAsUser(packageName, userId)`.
 - `launchClone(cloneId)`: installs again if needed, then `launchApk(packageName, userId)`.
 - `toggleFreezeApp(cloneId, freeze)`: sets the flag; freezing also calls `stopPackage`.
 - `removeClonedApp(cloneId)`: `stopPackage`, `uninstallPackageAsUser`, then deletes the virtual user and its data.
