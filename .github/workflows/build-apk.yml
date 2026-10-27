@@ -48,7 +48,8 @@ jobs:
 
       - name: Publish Release APK to GitHub Release
         uses: softprops/action-gh-release@v2
-        if: success()
+        # Only main publishes the "latest" release; branch runs just upload artifacts
+        if: success() && github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
