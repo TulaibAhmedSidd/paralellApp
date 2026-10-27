@@ -35,6 +35,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      # NewBlackbox builds its native hooks with NDK 29 against API 35. Gradle can't
+      # auto-download them on the runner until the SDK licences are accepted.
+      - name: Install NDK 29 and Android platform 35
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" --install "ndk;29.0.13846066" "platforms;android-35"
+
       - name: Build Android Release & Debug APKs
         run: |
           cd android
